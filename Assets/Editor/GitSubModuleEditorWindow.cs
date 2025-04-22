@@ -30,6 +30,9 @@ public class GitSubmoduleStatusEditorWindow : EditorWindow
     private Texture2D _submoduleIcon_AheadAndBehind;
     private Texture2D _submoduleIcon_Unstaged;
     private SubModuleSO _submoduleSaver;
+    private bool _pushable = false;
+    private bool _pullable = false;
+    private bool showIcons = false;
     
     [MenuItem("Window/My Tools/Git Submodule Manager")]
     public static void ShowWindow()
@@ -41,10 +44,11 @@ public class GitSubmoduleStatusEditorWindow : EditorWindow
 
     private void OnEnable()
     {
-        RefreshSubmodules();
-        EditorApplication.update += OnEditorUpdate;
         // Load the saved folder path when the window opens
         _submoduleSaver = SubModuleSO.LoadOrCreate();
+        RefreshSubmodules();
+        EditorApplication.update += OnEditorUpdate;
+       
     }
 
     private void OnDisable()
@@ -65,31 +69,13 @@ public class GitSubmoduleStatusEditorWindow : EditorWindow
     {
         DrawSubModuleStatus();
         
-        GUILayout.Label("SubModulefolder Icons:", EditorStyles.boldLabel);
-
-        // Object field that only accepts folders
-        EditorGUI.BeginChangeCheck();
-        _submoduleIcon_Default = (Texture2D)EditorGUILayout.ObjectField("Default",_submoduleSaver.SubmoduleIcon_Default, typeof(Texture2D), false);
-        _submoduleIcon_Ahead = (Texture2D)EditorGUILayout.ObjectField("Ahead Commit",_submoduleSaver.SubmoduleIcon_Ahead, typeof(Texture2D), false);
-        _submoduleIcon_Behind = (Texture2D)EditorGUILayout.ObjectField("Behind Commit",_submoduleSaver.SubmoduleIcon_Behind, typeof(Texture2D), false);
-        _submoduleIcon_AheadAndBehind=(Texture2D)EditorGUILayout.ObjectField("Ahead&Behind Commit",_submoduleSaver.SubmoduleIcon_AheadAndBehind, typeof(Texture2D), false);
-        _submoduleIcon_Unstaged = (Texture2D)EditorGUILayout.ObjectField("Unstaged",_submoduleSaver.SubmoduleIcon_Unstaged, typeof(Texture2D), false);
-        if (EditorGUI.EndChangeCheck())
-        {
-            _submoduleSaver.SubmoduleIcon_Default = _submoduleIcon_Default;
-            _submoduleSaver.SubmoduleIcon_Ahead = _submoduleIcon_Ahead;
-            _submoduleSaver.SubmoduleIcon_Behind = _submoduleIcon_Behind;
-            _submoduleSaver.SubmoduleIcon_AheadAndBehind = _submoduleIcon_AheadAndBehind;
-            _submoduleSaver.SubmoduleIcon_Unstaged = _submoduleIcon_Unstaged;
-            EditorUtility.SetDirty(_submoduleSaver);
-            AssetDatabase.SaveAssets();
-        }
+        DrawIconSettings();
     }
     
     /// <summary>
     /// Block for showing Git SubModule status and simple git actions
     /// </summary>
-    void DrawSubModuleStatus()
+    private void DrawSubModuleStatus()
         {
             if (GUILayout.Button("🔄 Manual Refresh"))
             {
@@ -115,6 +101,8 @@ public class GitSubmoduleStatusEditorWindow : EditorWindow
                 {
                     EditorGUILayout.HelpBox("✏️ Has local changes", MessageType.Warning);
                     _submoduleSaver.SetSubModuleIcon(GitSubmoduleStatus.Unstaged);
+                    _pullable = false;
+                    _pushable = false;
                 }
 
                 if (sub.commitsBehind > 0 && sub.commitsAhead > 0)
@@ -122,39 +110,86 @@ public class GitSubmoduleStatusEditorWindow : EditorWindow
                     EditorGUILayout.HelpBox($"⬇️ Behind by {sub.commitsBehind} commits, ⬆️ ahead by {sub.commitsAhead}",
                         MessageType.Warning);
                     _submoduleSaver.SetSubModuleIcon(GitSubmoduleStatus.AheadAndBehind);
+                    _pullable = false;
+                    _pushable = false;
                 }
                 else if (sub.commitsBehind > 0)
                 {
                     EditorGUILayout.HelpBox($"⬇️ Needs Pull ({sub.commitsBehind} commits behind)", MessageType.Warning);
                     _submoduleSaver.SetSubModuleIcon(GitSubmoduleStatus.Behind);
+                    _pullable = true;
+                    _pushable = false;
                 }
                 else if (sub.commitsAhead > 0)
                 {
                     EditorGUILayout.HelpBox($"⬆️ Needs Push ({sub.commitsAhead} commits ahead)", MessageType.Warning);
                     _submoduleSaver.SetSubModuleIcon(GitSubmoduleStatus.Ahead);
+                    _pullable = false;
+                    _pushable = true;
                 }
                 else if (!sub.hasLocalChanges)
                 {
                     EditorGUILayout.HelpBox("✅ Clean & up to date", MessageType.Info);
                     _submoduleSaver.SetSubModuleIcon(GitSubmoduleStatus.Default);
+                    _pullable = false;
+                    _pushable = false;
                 }
 
 
                 EditorGUILayout.BeginHorizontal();
+                GUI.enabled = _pullable;
                 if (GUILayout.Button("Pull")) RunGitCommand("pull", sub.path);
+                GUI.enabled = true;
+                GUI.enabled = _pushable;
                 if (GUILayout.Button("Push")) RunGitCommand("push", sub.path);
                 EditorGUILayout.EndHorizontal();
+                GUI.enabled = true;
 
                 EditorGUILayout.EndVertical();
                 GUILayout.Space(5);
             }
         }
+    
+    /// <summary>
+    /// Block for drawing git submodule Icons
+    /// </summary>
+    private void DrawIconSettings()
+    {
+        showIcons = EditorGUILayout.BeginFoldoutHeaderGroup(showIcons, "SubModule Folder Icon Settings");
+        if (showIcons)
+        {
+            GUILayout.Space(10);
+            // Object field that only accepts folders
+            EditorGUI.BeginChangeCheck();
+            _submoduleIcon_Default = (Texture2D)EditorGUILayout.ObjectField("Default",
+                _submoduleSaver.SubmoduleIcon_Default, typeof(Texture2D), false);
+            _submoduleIcon_Ahead = (Texture2D)EditorGUILayout.ObjectField("Ahead Commit",
+                _submoduleSaver.SubmoduleIcon_Ahead, typeof(Texture2D), false);
+            _submoduleIcon_Behind = (Texture2D)EditorGUILayout.ObjectField("Behind Commit",
+                _submoduleSaver.SubmoduleIcon_Behind, typeof(Texture2D), false);
+            _submoduleIcon_AheadAndBehind = (Texture2D)EditorGUILayout.ObjectField("Ahead&Behind Commit",
+                _submoduleSaver.SubmoduleIcon_AheadAndBehind, typeof(Texture2D), false);
+            _submoduleIcon_Unstaged = (Texture2D)EditorGUILayout.ObjectField("Unstaged",
+                _submoduleSaver.SubmoduleIcon_Unstaged, typeof(Texture2D), false);
+            if (EditorGUI.EndChangeCheck())
+            {
+                _submoduleSaver.SubmoduleIcon_Default = _submoduleIcon_Default;
+                _submoduleSaver.SubmoduleIcon_Ahead = _submoduleIcon_Ahead;
+                _submoduleSaver.SubmoduleIcon_Behind = _submoduleIcon_Behind;
+                _submoduleSaver.SubmoduleIcon_AheadAndBehind = _submoduleIcon_AheadAndBehind;
+                _submoduleSaver.SubmoduleIcon_Unstaged = _submoduleIcon_Unstaged;
+                EditorUtility.SetDirty(_submoduleSaver);
+                AssetDatabase.SaveAssets();
+            }
+        }
 
+        EditorGUILayout.EndFoldoutHeaderGroup();
+    }
     private void RefreshSubmodules()
     {
         lastRefreshTime = EditorApplication.timeSinceStartup;
         submodules.Clear();
-        //_submoduleSaver.Submodules.Clear();
+        _submoduleSaver.Submodules.Clear();
 
         string rootPath = Directory.GetParent(Application.dataPath).FullName;
         string gitmodulesPath = Path.Combine(rootPath, ".gitmodules");
@@ -174,7 +209,7 @@ public class GitSubmoduleStatusEditorWindow : EditorWindow
             else if (line.Trim().StartsWith("path ="))
             {
                 current.path = line.Split('=')[1].Trim();
-                //_submoduleSaver.Submodules.Add(current.path);
+                _submoduleSaver.Submodules.Add(current.path);
                 current.name = Path.GetFileName(current.path);
                 current.branch = GetBranchName(current.path);
                 int[] commitCounts = GetAheadBehindCounts(current.path);
@@ -254,7 +289,7 @@ public class SubModuleSO : ScriptableObject
     public Texture2D SubmoduleIcon_Behind = default;
     public Texture2D SubmoduleIcon_AheadAndBehind = default;
     public Texture2D SubmoduleIcon_Unstaged = default;
-    public List<string> Submodules=new List<string>();
+    public List<string> Submodules { get; set;}
     public const string AssetPath = "Assets/Editor/GitSubModuleConfig.asset";
     private Texture2D designatedIcon = default;
 
@@ -279,13 +314,13 @@ public class SubModuleSO : ScriptableObject
                 designatedIcon = SubmoduleIcon_Ahead;
                 break;
             case GitSubmoduleStatus.Behind:
-                designatedIcon = SubmoduleIcon_Ahead;
+                designatedIcon = SubmoduleIcon_Behind;
                 break;
             case GitSubmoduleStatus.AheadAndBehind:
-                designatedIcon = SubmoduleIcon_Ahead;
+                designatedIcon = SubmoduleIcon_AheadAndBehind;
                 break;
             case GitSubmoduleStatus.Unstaged:
-                designatedIcon = SubmoduleIcon_Ahead;
+                designatedIcon = SubmoduleIcon_Unstaged;
                 break;
             default:
                 designatedIcon = SubmoduleIcon_Default;
