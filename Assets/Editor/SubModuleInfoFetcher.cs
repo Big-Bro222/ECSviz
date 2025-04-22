@@ -32,7 +32,6 @@ public class SubModuleInfoFetcher
 
         foreach (var line in lines)
         {
-            Debug.LogError(line);
             if (line.Trim().StartsWith("[submodule"))
             {
                 current = new SubmoduleInfo();
