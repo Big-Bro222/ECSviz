@@ -10,19 +10,7 @@ using Debug = UnityEngine.Debug;
 
 public class GitSubmoduleStatusEditorWindow : EditorWindow
 {
-    private class SubmoduleInfo
-    {
-        public string name;
-        public string path;
-        public string branch;
-        public int commitsAhead;
-        public int commitsBehind;
-        public bool hasLocalChanges;
-        
-    }
-
     private List<SubmoduleInfo> submodules = new List<SubmoduleInfo>();
-    private double lastRefreshTime = 0f;
     private const float refreshInterval = 10f; // seconds
     private Texture2D _submoduleIcon_Default;
     private Texture2D _submoduleIcon_Ahead;
@@ -46,7 +34,7 @@ public class GitSubmoduleStatusEditorWindow : EditorWindow
     {
         // Load the saved folder path when the window opens
         _submoduleSaver = SubModuleSO.LoadOrCreate();
-        RefreshSubmodules();
+        submodules= SubModuleInfoFetcher.RefreshSubmodulesModel();
         EditorApplication.update += OnEditorUpdate;
        
     }
@@ -58,9 +46,9 @@ public class GitSubmoduleStatusEditorWindow : EditorWindow
 
     private void OnEditorUpdate()
     {
-        if (EditorApplication.timeSinceStartup - lastRefreshTime > refreshInterval)
+        if (EditorApplication.timeSinceStartup -  SubModuleInfoFetcher.LastRefreshTime > refreshInterval)
         {
-            RefreshSubmodules();
+            submodules = SubModuleInfoFetcher.RefreshSubmodulesModel();
             Repaint();
         }
     }
@@ -68,7 +56,6 @@ public class GitSubmoduleStatusEditorWindow : EditorWindow
     private void OnGUI()
     {
         DrawSubModuleStatus();
-        
         DrawIconSettings();
     }
     
@@ -79,7 +66,7 @@ public class GitSubmoduleStatusEditorWindow : EditorWindow
         {
             if (GUILayout.Button("🔄 Manual Refresh"))
             {
-                RefreshSubmodules();
+                submodules= SubModuleInfoFetcher.RefreshSubmodulesModel();
             }
 
             GUILayout.Space(10);
@@ -138,10 +125,10 @@ public class GitSubmoduleStatusEditorWindow : EditorWindow
 
                 EditorGUILayout.BeginHorizontal();
                 GUI.enabled = _pullable;
-                if (GUILayout.Button("Pull")) RunGitCommand("pull", sub.path);
+                if (GUILayout.Button("Pull")) SubModuleInfoFetcher.RunGitCommand("pull", sub.path);
                 GUI.enabled = true;
                 GUI.enabled = _pushable;
-                if (GUILayout.Button("Push")) RunGitCommand("push", sub.path);
+                if (GUILayout.Button("Push")) SubModuleInfoFetcher.RunGitCommand("push", sub.path);
                 EditorGUILayout.EndHorizontal();
                 GUI.enabled = true;
 
@@ -185,156 +172,6 @@ public class GitSubmoduleStatusEditorWindow : EditorWindow
 
         EditorGUILayout.EndFoldoutHeaderGroup();
     }
-    private void RefreshSubmodules()
-    {
-        lastRefreshTime = EditorApplication.timeSinceStartup;
-        submodules.Clear();
-        _submoduleSaver.Submodules.Clear();
-
-        string rootPath = Directory.GetParent(Application.dataPath).FullName;
-        string gitmodulesPath = Path.Combine(rootPath, ".gitmodules");
-
-        if (!File.Exists(gitmodulesPath)) return;
-
-        var lines = File.ReadAllLines(gitmodulesPath);
-        SubmoduleInfo current = null;
-
-        foreach (var line in lines)
-        {
-            if (line.Trim().StartsWith("[submodule"))
-            {
-                current = new SubmoduleInfo();
-                submodules.Add(current);
-            }
-            else if (line.Trim().StartsWith("path ="))
-            {
-                current.path = line.Split('=')[1].Trim();
-                _submoduleSaver.Submodules.Add(current.path);
-                current.name = Path.GetFileName(current.path);
-                current.branch = GetBranchName(current.path);
-                int[] commitCounts = GetAheadBehindCounts(current.path);
-                current.commitsBehind = commitCounts[0];
-                current.commitsAhead = commitCounts[1];
-                current.hasLocalChanges = HasLocalChanges(current.path);
-            }
-        }
-    }
-
-    private string GetBranchName(string relativePath)
-    {
-        return RunGitCommand("rev-parse --abbrev-ref HEAD", relativePath)?.Trim();
-    }
-    
-    private int[] GetAheadBehindCounts(string relativePath)
-    {
-        string output = RunGitCommand("rev-list --left-right --count @{u}...HEAD", relativePath);
-        int[] result = new int[2]; // [behind, ahead]
-
-        if (!string.IsNullOrWhiteSpace(output))
-        {
-            var parts = output.Split('\t');
-            if (parts.Length == 2)
-            {
-                int.TryParse(parts[0], out result[0]); // behind
-                int.TryParse(parts[1], out result[1]); // ahead
-            }
-        }
-
-        return result;
-    }
-
-
-    private bool HasLocalChanges(string relativePath)
-    {
-        string output = RunGitCommand("status --porcelain", relativePath);
-        return !string.IsNullOrWhiteSpace(output);
-    }
-
-    private string RunGitCommand(string arguments, string relativePath)
-    {
-        try
-        {
-            string workingDir = Path.Combine(Directory.GetParent(Application.dataPath).FullName, relativePath);
-
-            var startInfo = new ProcessStartInfo("git", arguments)
-            {
-                WorkingDirectory = workingDir,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                StandardOutputEncoding = Encoding.UTF8,
-                StandardErrorEncoding = Encoding.UTF8
-            };
-
-            using (var process = Process.Start(startInfo))
-            {
-                string output = process.StandardOutput.ReadToEnd();
-                process.WaitForExit();
-                return output.Trim();
-            }
-        }
-        catch (System.Exception ex)
-        {
-            UnityEngine.Debug.LogError($"Git error in [{relativePath}]: {ex.Message}");
-            return null;
-        }
-    }
 }
 
-public class SubModuleSO : ScriptableObject
-{
-    public Texture2D SubmoduleIcon_Default = default;
-    public Texture2D SubmoduleIcon_Ahead = default;
-    public Texture2D SubmoduleIcon_Behind = default;
-    public Texture2D SubmoduleIcon_AheadAndBehind = default;
-    public Texture2D SubmoduleIcon_Unstaged = default;
-    public List<string> Submodules { get; set;} = new();
-    public const string AssetPath = "Assets/Editor/GitSubModuleConfig.asset";
-    private Texture2D designatedIcon = default;
 
-    public static SubModuleSO LoadOrCreate()
-    {
-        var settings = AssetDatabase.LoadAssetAtPath<SubModuleSO>(AssetPath);
-        if (settings == null)
-        {
-            settings = ScriptableObject.CreateInstance<SubModuleSO>();
-            AssetDatabase.CreateAsset(settings, AssetPath);
-            AssetDatabase.SaveAssets();
-        }
-        return settings;
-    }
-
-    public Texture2D DesignatedIcon => designatedIcon;
-
-    public void SetSubModuleIcon(GitSubmoduleStatus submoduleStatus)
-    {
-        switch (submoduleStatus)
-        {
-            case GitSubmoduleStatus.Ahead:
-                designatedIcon = SubmoduleIcon_Ahead;
-                break;
-            case GitSubmoduleStatus.Behind:
-                designatedIcon = SubmoduleIcon_Behind;
-                break;
-            case GitSubmoduleStatus.AheadAndBehind:
-                designatedIcon = SubmoduleIcon_AheadAndBehind;
-                break;
-            case GitSubmoduleStatus.Unstaged:
-                designatedIcon = SubmoduleIcon_Unstaged;
-                break;
-            default:
-                designatedIcon = SubmoduleIcon_Default;
-                break;
-        }
-    }
-}
-
-public enum GitSubmoduleStatus
-{
-    Default,
-    Ahead,
-    Behind,
-    AheadAndBehind,
-    Unstaged
-}

@@ -12,11 +12,14 @@ public class SubModuleIconDrawer
     {
         _submoduleSaver = SubModuleSO.LoadOrCreate();
         EditorApplication.projectWindowItemOnGUI += DrawFolderIcon;
+        SubModuleInfoFetcher.RefreshSubmodulesModel();
     }
 
     static void DrawFolderIcon(string guid, Rect rect)
     {
         var path = AssetDatabase.GUIDToAssetPath(guid);
+       
+        
 
         if (path == "" ||
             Event.current.type != EventType.Repaint ||
@@ -25,7 +28,7 @@ public class SubModuleIconDrawer
         {
             return;
         }
-
+        
         Rect imageRect;
 
         if (rect.height > 20)

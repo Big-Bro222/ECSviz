@@ -1,0 +1,16 @@
+fileFormatVersion: 2
+guid: 37b4a28a4c1a77f44a4403ef4d4a3e04
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences:
+  - SubmoduleIcon_Default: {fileID: 2800000, guid: bcad835676789c143b62f67ecbe91e41, type: 3}
+  - SubmoduleIcon_Ahead: {fileID: 2800000, guid: a8ddffc54ed6f1b4ba847e50b4173026, type: 3}
+  - SubmoduleIcon_Behind: {fileID: 2800000, guid: 6c0b0dc295c5a6c4cbb0bd6af6cd2881, type: 3}
+  - SubmoduleIcon_AheadAndBehind: {fileID: 2800000, guid: 1fcca4793f02a754fb948a2bb1d034c6, type: 3}
+  - SubmoduleIcon_Unstaged: {fileID: 2800000, guid: 12d882a0c543f264fb61e08e57f0c2d0, type: 3}
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
